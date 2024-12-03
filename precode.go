@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -16,14 +17,13 @@ func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 	// 1. Функция Generator
 	i := int64(1)
 	for {
-		v := (i - 1) + 1
 		select {
 		case <-ctx.Done():
 			close(ch)
 			return
-		case ch <- v:
+		case ch <- i:
 			fn(i)
-			i++
+			atomic.AddInt64(&i, 1)
 		}
 	}
 }
@@ -34,7 +34,7 @@ func Worker(in <-chan int64, out chan<- int64) {
 	for v := range in {
 		out <- v
 	}
-	close(out)
+	defer close(out)
 }
 
 func main() {
@@ -75,8 +75,8 @@ func main() {
 		wg.Add(1)
 		go func(in <-chan int64, i int64) {
 			for val := range in {
-				chOut <- val
 				amounts[i]++
+				chOut <- val
 			}
 			wg.Done()
 		}(in, int64(i))
@@ -86,18 +86,16 @@ func main() {
 		// ждём завершения работы всех горутин для outs
 		wg.Wait()
 		// закрываем результирующий канал
-		close(chOut)
+		defer close(chOut)
 	}()
 
 	var count int64 // количество чисел результирующего канала
 	var sum int64   // сумма чисел результирующего канала
-	var mu sync.Mutex
+
 	// 5. Читаем числа из результирующего канала
 	for v := range chOut {
-		mu.Lock()
 		sum += v
 		count++
-		mu.Unlock()
 	}
 
 	fmt.Println("Количество чисел", inputCount, count)
