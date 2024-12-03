@@ -33,6 +33,7 @@ func Worker(in <-chan int64, out chan<- int64) {
 	// 2. Функция Worker
 	for v := range in {
 		out <- v
+		time.Sleep(1 * time.Millisecond)
 	}
 	defer close(out)
 }
